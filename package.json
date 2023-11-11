@@ -1,0 +1,15 @@
+{
+  "name": "seek-slider-chrome-extension",
+  "version": "1.0.0",
+  "scripts": {
+    "watch": "tsc build --watch",
+    "pack": "rm extension.zip | zip extension -r scripts -r images manifest.json -x \"*.ts\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "chrome-types": "^0.1.241",
+    "typescript": "^5.2.2"
+  }
+}
