@@ -39,77 +39,32 @@ function round(n: number) {
 
 class ProgressBar extends EventTarget {
   static id = "controlled-shorts-progress-bar";
-  static styles = `
-:host {
-  --progress: 0;
-}
-
-.container {
-  cursor: pointer;
-  width: 100%;
-  height: 6px;
-  position: relative;
-}
-
-.track {
-  width: 100%;
-  height: 100%;
-  background: #999;
-}
-
-.thumb {
-  --size: 12px;
-
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  left: calc(var(--progress) * 100%);
-
-  background: #f00;
-  width: var(--size);
-  height: var(--size);
-  border-radius: var(--size);
-}
-
-.container:not(:hover) .thumb {
-  display: none;
-}
-
-.progress {
-  position: absolute;
-  bottom: 0;
-  left: 0px;
-  height: 100%;
-  width: 100%;
-
-  transform-origin: left;
-  transform: scaleX(calc(var(--progress)));
-
-  background: #f00;
-}
-  `;
 
   private host: HTMLDivElement;
-  private shadowRoot: ShadowRoot;
+  private shadow: ShadowRoot;
   private container: HTMLElement;
 
   constructor() {
     super();
     this.host = document.createElement("div");
     this.host.id = ProgressBar.id;
-    this.shadowRoot = this.host.attachShadow({ mode: "open" });
-    this.shadowRoot.innerHTML = `
-<style>${ProgressBar.styles}</style>
-
-<div class="container">
-  <div class="track"></div>
-  <div class="thumb"></div>
-  <div class="progress"></div>
-</div>
-    `;
-    this.container = this.shadowRoot.querySelector(".container")!;
+    this.shadow = this.host.attachShadow({ mode: "open" });
+    this.shadow.innerHTML = this.view();
+    this.container = this.shadow.querySelector(".container")!;
 
     this.initEvents();
+  }
+
+  setStyle(styles: Partial<CSSStyleDeclaration>) {
+    Object.assign(this.host.style, styles);
+  }
+
+  setProgress(progress: number) {
+    this.host.style.setProperty("--progress", `${round(progress)}`);
+  }
+
+  render(container: HTMLElement) {
+    container.appendChild(this.host);
   }
 
   private seek(e: MouseEvent | PointerEvent) {
@@ -141,16 +96,64 @@ class ProgressBar extends EventTarget {
     });
   }
 
-  setStyle(styles: Partial<CSSStyleDeclaration>) {
-    Object.assign(this.host.style, styles);
+  private view() {
+    return `
+<div class="container">
+  <div class="track"></div>
+  <div class="thumb"></div>
+  <div class="progress"></div>
+</div>
+
+<style>
+  :host {
+    --progress: 0;
   }
 
-  setProgress(progress: number) {
-    this.host.style.setProperty("--progress", `${round(progress)}`);
+  .container {
+    cursor: pointer;
+    width: 100%;
+    height: 6px;
+    position: relative;
   }
 
-  render(container: HTMLElement) {
-    container.appendChild(this.host);
+  .track {
+    width: 100%;
+    height: 100%;
+    background: #999;
+  }
+
+  .thumb {
+    --size: 12px;
+
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    left: calc(var(--progress) * 100%);
+
+    background: #f00;
+    width: var(--size);
+    height: var(--size);
+    border-radius: var(--size);
+  }
+
+  .container:not(:hover) .thumb {
+    display: none;
+  }
+
+  .progress {
+    position: absolute;
+    bottom: 0;
+    left: 0px;
+    height: 100%;
+    width: 100%;
+
+    transform-origin: left;
+    transform: scaleX(calc(var(--progress)));
+
+    background: #f00;
+  }
+</style>
+`;
   }
 }
 
@@ -194,7 +197,6 @@ async function initProgressBar() {
 }
 
 function isShortsPage() {
-  log("isShortsPage", location.pathname);
   return location.pathname.includes("/shorts/");
 }
 
