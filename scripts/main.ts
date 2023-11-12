@@ -2,57 +2,27 @@ const LOG_NS = "[Controlled shorts]";
 const log = console.log.bind(console, LOG_NS);
 const warn = console.warn.bind(console, LOG_NS);
 
-function waitForElement(
-  selector: string,
-  options: { context?: HTMLElement; limit?: number } = {}
-): Promise<HTMLElement> {
-  const context = options?.context ?? document;
-  const limit = options?.limit ?? 5000;
-
-  let intervalId: number;
-
-  const elementPromise = new Promise<HTMLElement>((resolve) => {
-    intervalId = setInterval(() => {
-      const found = context.querySelector<HTMLElement>(selector);
-      if (found) {
-        clearInterval(intervalId);
-        resolve(found);
-      }
-    }, 100);
-  });
-
-  return Promise.race([
-    elementPromise,
-    timeout(limit) as Promise<HTMLElement>,
-  ]).finally(() => clearInterval(intervalId));
-}
-
-function timeout(time: number) {
-  return new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("timeout")), time)
-  );
-}
-
 function round(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-class ProgressBar extends EventTarget {
-  static id = "controlled-shorts-progress-bar";
+function isShortsPage() {
+  return location.pathname.includes("/shorts/");
+}
 
+class ProgressBar extends EventTarget {
   private host: HTMLDivElement;
   private shadow: ShadowRoot;
   private container: HTMLElement;
 
+  private isPointerDown = false;
+
   constructor() {
     super();
     this.host = document.createElement("div");
-    this.host.id = ProgressBar.id;
-    this.shadow = this.host.attachShadow({ mode: "open" });
+    this.shadow = this.host.attachShadow({ mode: "closed" });
     this.shadow.innerHTML = this.view();
     this.container = this.shadow.querySelector(".container")!;
-
-    this.initEvents();
   }
 
   setStyle(styles: Partial<CSSStyleDeclaration>) {
@@ -63,38 +33,43 @@ class ProgressBar extends EventTarget {
     this.host.style.setProperty("--progress", `${round(progress)}`);
   }
 
-  render(container: HTMLElement) {
-    container.appendChild(this.host);
+  mount(node: HTMLElement, position: InsertPosition = "beforeend") {
+    this.container.addEventListener("pointerdown", this.handlePointerDown);
+    this.container.addEventListener("pointermove", this.handlePointerMove);
+    this.container.addEventListener("pointerup", this.handlePointerUp);
+    node.insertAdjacentElement(position, this.host);
   }
 
-  private seek(e: MouseEvent | PointerEvent) {
+  destroy() {
+    this.container.removeEventListener("pointerdown", this.handlePointerDown);
+    this.container.removeEventListener("pointermove", this.handlePointerMove);
+    this.container.removeEventListener("pointerup", this.handlePointerUp);
+    this.host.remove();
+  }
+
+  private seek = (e: MouseEvent | PointerEvent) => {
     const { left, width } = this.container.getBoundingClientRect();
     const progress = (e.clientX - left) / width;
 
     this.setProgress(progress);
     this.dispatchEvent(new CustomEvent("seek", { detail: progress }));
-  }
+  };
 
-  private initEvents() {
-    let isPointerDown = false;
+  private handlePointerDown = (e: PointerEvent) => {
+    e.preventDefault();
+    this.isPointerDown = true;
+    this.dispatchEvent(new CustomEvent("seekstart"));
+    this.seek(e);
+  };
 
-    this.container.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
+  private handlePointerMove = (e: PointerEvent) => {
+    this.isPointerDown && this.seek(e);
+  };
 
-      isPointerDown = true;
-      this.dispatchEvent(new CustomEvent("seekstart"));
-      this.seek(e);
-    });
-
-    this.container.addEventListener("pointermove", (e) => {
-      isPointerDown && this.seek(e);
-    });
-
-    this.container.addEventListener("pointerup", () => {
-      isPointerDown = false;
-      this.dispatchEvent(new CustomEvent("seekend"));
-    });
-  }
+  private handlePointerUp = () => {
+    this.isPointerDown = false;
+    this.dispatchEvent(new CustomEvent("seekend"));
+  };
 
   private view() {
     return `
@@ -157,12 +132,7 @@ class ProgressBar extends EventTarget {
   }
 }
 
-async function initProgressBar() {
-  const renderer = await waitForElement("ytd-reel-video-renderer[is-active]");
-  const video = (await waitForElement("video", {
-    context: renderer,
-  })) as HTMLVideoElement;
-
+function initProgressBar(node: HTMLElement, video: HTMLVideoElement) {
   const progressBar = new ProgressBar();
   progressBar.setStyle({
     width: "100%",
@@ -170,46 +140,80 @@ async function initProgressBar() {
     bottom: "0",
   });
 
-  function timeUpdateListener() {
+  function handleTimeUpdate() {
     progressBar.setProgress(video.currentTime / video.duration);
   }
 
-  function arrowKeysListener(e: KeyboardEvent) {
+  function handleSeekStart() {
+    video.pause();
+  }
+
+  function handleSeekEnd() {
+    video.play();
+  }
+
+  function handleSeek(e: Event) {
+    video.currentTime = video.duration * (e as CustomEvent<number>).detail;
+  }
+
+  video.addEventListener("timeupdate", handleTimeUpdate);
+  progressBar.addEventListener("seekstart", handleSeekStart);
+  progressBar.addEventListener("seekend", handleSeekEnd);
+  progressBar.addEventListener("seek", handleSeek);
+  progressBar.mount(node);
+
+  return function cleanUp() {
+    video.removeEventListener("timeupdate", handleTimeUpdate);
+    progressBar.removeEventListener("seekstart", handleSeekStart);
+    progressBar.removeEventListener("seekend", handleSeekEnd);
+    progressBar.removeEventListener("seek", handleSeek);
+    progressBar.destroy();
+  };
+}
+
+const POLL_INTERVAL = 100;
+let cleanUp: () => void;
+let initCheckInterval: number | undefined;
+
+function init() {
+  if (!isShortsPage()) {
+    return;
+  }
+
+  const node = document.querySelector<HTMLElement>(
+    "ytd-reel-video-renderer[is-active]"
+  );
+  const video = node?.querySelector("video");
+
+  if (!node || !video) {
+    return;
+  }
+
+  clearInterval(initCheckInterval);
+  initCheckInterval = undefined;
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (!video) return;
     e.key === "ArrowRight" && (video.currentTime += 5);
     e.key === "ArrowLeft" && (video.currentTime -= 5);
   }
 
-  document.addEventListener("keydown", arrowKeysListener);
-  video.addEventListener("timeupdate", timeUpdateListener);
-  progressBar.addEventListener("seekstart", () => video.pause());
-  progressBar.addEventListener("seekend", () => video.play());
-  progressBar.addEventListener("seek", (e) => {
-    video.currentTime = video.duration * (e as CustomEvent).detail;
-  });
+  document.addEventListener("keydown", handleKeydown);
+  const cleanUpAfterProgressBar = initProgressBar(node, video);
 
-  progressBar.render(renderer);
-
-  return function cleanUp() {
-    document.getElementById(ProgressBar.id)?.remove();
-    document.removeEventListener("keydown", arrowKeysListener);
-    video.removeEventListener("timeupdate", timeUpdateListener);
+  cleanUp = () => {
+    cleanUpAfterProgressBar();
+    document.removeEventListener("keydown", handleKeydown);
   };
 }
 
-function isShortsPage() {
-  return location.pathname.includes("/shorts/");
-}
-
-let cleanUp: () => void;
-async function init() {
-  try {
-    cleanUp = await initProgressBar();
-  } catch {}
-}
-
-isShortsPage() && init();
+initCheckInterval = setInterval(init, POLL_INTERVAL);
 
 document.addEventListener("yt-navigate-finish", () => {
   cleanUp?.();
-  isShortsPage() && init();
+  clearInterval(initCheckInterval);
+
+  if (isShortsPage()) {
+    initCheckInterval = setInterval(init, POLL_INTERVAL);
+  }
 });
