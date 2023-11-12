@@ -193,6 +193,11 @@ async function initProgressBar() {
   };
 }
 
+function isShortsPage() {
+  log("isShortsPage", location.pathname);
+  return location.pathname.includes("/shorts/");
+}
+
 let cleanUp: () => void;
 async function init() {
   try {
@@ -200,15 +205,9 @@ async function init() {
   } catch {}
 }
 
-init();
+isShortsPage() && init();
 
-document.addEventListener("yt-navigate-finish", async (e) => {
+document.addEventListener("yt-navigate-finish", () => {
   cleanUp?.();
-
-  const typedEvent = e as CustomEvent<{ pageType: string }>;
-  if (typedEvent.detail.pageType !== "shorts") {
-    return;
-  }
-
-  init();
+  isShortsPage() && init();
 });
