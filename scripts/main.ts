@@ -6,7 +6,7 @@ function round(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-function between(n: number, min: number, max: number) {
+function clamp(n: number, min: number, max: number) {
   return Math.min(Math.max(n, min), max);
 }
 
@@ -39,41 +39,53 @@ class ProgressBar extends EventTarget {
 
   mount(node: HTMLElement, position: InsertPosition = "beforeend") {
     this.container.addEventListener("pointerdown", this.handlePointerDown);
-    this.container.addEventListener("pointermove", this.handlePointerMove);
-    this.container.addEventListener("pointerup", this.handlePointerUp);
+    document.addEventListener("pointermove", this.handlePointerMove);
     node.insertAdjacentElement(position, this.host);
   }
 
   destroy() {
     this.container.removeEventListener("pointerdown", this.handlePointerDown);
-    this.container.removeEventListener("pointermove", this.handlePointerMove);
-    this.container.removeEventListener("pointerup", this.handlePointerUp);
+    document.removeEventListener("pointermove", this.handlePointerMove);
     this.host.remove();
   }
 
   private seek = (e: MouseEvent | PointerEvent) => {
     const { left, width } = this.container.getBoundingClientRect();
-    const x = e.clientX - left;
-    const progress = between(x, 0, width) / width;
+    const relativeX = e.clientX - left;
+    const progress = clamp(relativeX, 0, width) / width;
 
     this.setProgress(progress);
     this.dispatchEvent(new CustomEvent("seek", { detail: progress }));
   };
 
+  private setIsPointerDown = (isPointerDown: boolean) => {
+    this.isPointerDown = isPointerDown;
+    if (isPointerDown) {
+      this.container.classList.add("drag");
+    } else {
+      this.container.classList.remove("drag");
+    }
+  };
+
   private handlePointerDown = (e: PointerEvent) => {
     e.preventDefault();
-    this.isPointerDown = true;
+
+    this.setIsPointerDown(true);
     this.dispatchEvent(new CustomEvent("seekstart"));
     this.seek(e);
+
+    document.addEventListener(
+      "pointerup",
+      () => {
+        this.setIsPointerDown(false);
+        this.dispatchEvent(new CustomEvent("seekend"));
+      },
+      { once: true }
+    );
   };
 
   private handlePointerMove = (e: PointerEvent) => {
     this.isPointerDown && this.seek(e);
-  };
-
-  private handlePointerUp = () => {
-    this.isPointerDown = false;
-    this.dispatchEvent(new CustomEvent("seekend"));
   };
 
   private view() {
@@ -115,9 +127,14 @@ class ProgressBar extends EventTarget {
     height: var(--size);
     border-radius: var(--size);
   }
-
-  .container:not(:hover) .thumb {
+ 
+  .container .thumb {
     display: none;
+  }
+  
+  .container.drag .thumb,
+  .container:hover .thumb {
+    display: block;
   }
 
   .progress {
@@ -154,7 +171,11 @@ function initProgressBar(node: HTMLElement, video: HTMLVideoElement) {
   }
 
   function handleSeekEnd() {
-    video.play();
+    video.play().catch(() => {
+      // suppress error
+      // may occur when user tries to seek in the very end of the video
+      // probably conflicts with youtube's playback
+    });
   }
 
   function handleSeek(e: Event) {
