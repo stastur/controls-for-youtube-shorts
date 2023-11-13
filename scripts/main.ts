@@ -6,6 +6,10 @@ function round(n: number) {
   return Math.round(n * 100) / 100;
 }
 
+function between(n: number, min: number, max: number) {
+  return Math.min(Math.max(n, min), max);
+}
+
 function isShortsPage() {
   return location.pathname.includes("/shorts/");
 }
@@ -49,7 +53,8 @@ class ProgressBar extends EventTarget {
 
   private seek = (e: MouseEvent | PointerEvent) => {
     const { left, width } = this.container.getBoundingClientRect();
-    const progress = (e.clientX - left) / width;
+    const x = e.clientX - left;
+    const progress = between(x, 0, width) / width;
 
     this.setProgress(progress);
     this.dispatchEvent(new CustomEvent("seek", { detail: progress }));
