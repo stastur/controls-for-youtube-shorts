@@ -1,5 +1,6 @@
 {
-  "name": "seek-slider-chrome-extension",
+  "name": "swift-shorts",
+  "description": "Control YouTube™ Shorts, Command Your Experience!",
   "version": "1.0.0",
   "scripts": {
     "watch": "tsc --watch",
