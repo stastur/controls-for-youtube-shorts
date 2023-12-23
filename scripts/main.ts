@@ -160,6 +160,7 @@ function initProgressBar(node: HTMLElement, video: HTMLVideoElement) {
     width: "100%",
     position: "absolute",
     bottom: "0",
+    zIndex: "1",
   });
 
   function handleTimeUpdate() {

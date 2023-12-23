@@ -1,10 +1,11 @@
 {
   "name": "swift-shorts",
   "description": "Control YouTube™ Shorts, Command Your Experience!",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "scripts": {
     "watch": "tsc --watch",
-    "pack": "rm extension.zip | zip extension -r scripts -r images manifest.json -x \"*.ts\""
+    "build": "tsc",
+    "pack": "npm run build && rm extension.zip && zip extension -r scripts -r images manifest.json -x \"*.ts\""
   },
   "keywords": [],
   "author": "",

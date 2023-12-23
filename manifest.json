@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SwiftShorts",
   "description": "Control YouTube™ Shorts, Command Your Experience!",
-  "version": "1.0",
+  "version": "1.0.1",
   "icons": {
     "128": "images/logo-128.png"
   },
