@@ -1,7 +1,7 @@
 {
   "name": "swift-shorts",
   "description": "Control YouTube™ Shorts, Command Your Experience!",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "scripts": {
     "watch": "tsc --watch",
     "build": "tsc",
